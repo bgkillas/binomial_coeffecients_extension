@@ -2,13 +2,23 @@ use image::{Rgb, RgbImage};
 use std::env::args;
 use std::io::{stdout, Write};
 fn main() {
-    let args = args().collect::<Vec<String>>();
-    if args.len() != 4
+    let mut args = args().collect::<Vec<String>>();
+    if args.len() <= 5
     {
-        return
+        args.push(String::new());
+        args.push(String::new());
+        args.push(String::new());
+        args.push(String::new());
+        args.push(String::new());
     }
-    let faces = args[1].clone().parse::<usize>().unwrap();
-    let dice = args[2].clone().parse::<usize>().unwrap();
+    let mut multi_face = Vec::new();
+    let mut faces = 3;
+    if let Ok(num) = args[1].clone().parse::<usize>() {
+        faces = num;
+    } else {
+        multi_face = args[1].split(',').map(|a| a.parse::<usize>().unwrap_or(3)).collect::<Vec<usize>>();
+    }
+    let dice = args[2].clone().parse::<usize>().unwrap_or(3);
     let mut do_sum = false;
     let mut file = String::new();
     if let Ok(num) = args[3].clone().parse::<u8>()
@@ -17,19 +27,24 @@ fn main() {
     } else {
         file = args[3].clone()
     }
+    let mut modulo = 0;
+    if let Ok(num) = args[4].clone().parse::<usize>()
+    {
+        modulo = num
+    }
     //let faces = vec![faces; dice];
     if do_sum
     {
         for i in 2..=faces
         {
-            print_dice(i, i.pow(dice as u32), do_sum, file.clone())
+            print_dice(i, i.pow(dice as u32), do_sum, file.clone(), multi_face.clone(), modulo)
         }
     } else {
-        print_dice(faces, dice, do_sum, file)
+        print_dice(faces, dice, do_sum, file, multi_face, modulo)
     }
 }
 
-fn print_dice(faces: usize, dice: usize, do_sum: bool, file: String)
+fn print_dice(mut faces: usize, dice: usize, do_sum: bool, file: String, multi_face: Vec<usize>, modulo: usize)
 {
     let file_exists = !file.is_empty();
     let mut all_nums = vec![vec![1]];
@@ -44,11 +59,18 @@ fn print_dice(faces: usize, dice: usize, do_sum: bool, file: String)
             faces
         ])
     } else {
+        let multi = !multi_face.is_empty();
+        if multi {
+            faces = multi_face[0]
+        }
         let mut last = vec![1; faces];
         all_nums.push(last.clone());
         let mut current = last.clone();
         for i in 1..dice
         {
+            if multi {
+                faces = multi_face[i % multi_face.len()]
+            }
             if do_sum
             {
                 if is_power_of(i, faces)
@@ -60,7 +82,7 @@ fn print_dice(faces: usize, dice: usize, do_sum: bool, file: String)
                 println!("{:?}", current);
             }
             current = Vec::new();
-            for p in 0..=faces * (i + 1) - i - 1
+            for p in 0..=if multi {multi_face.iter().sum::<usize>() * (i/multi_face.len()) + multi_face[0..=i % multi_face.len()].iter().sum::<usize>()} else{faces * (i + 1)} - i - 1
             {
                 let value = last[if (p + 1) > faces
                 {
@@ -68,10 +90,10 @@ fn print_dice(faces: usize, dice: usize, do_sum: bool, file: String)
                 } else {
                     0
                 }
-                    ..=p.min(faces * i - i)]
+                    ..=p.min(if multi {multi_face.iter().sum::<usize>() * (i/multi_face.len()) + multi_face[0..i % multi_face.len()].iter().sum::<usize>()} else {faces * i} - i)]
                     .iter()
                     .sum::<usize>();
-                current.push(value % faces)
+                current.push(value % if modulo == 0 {faces}else{modulo})
             }
             last.clone_from(&current);
             all_nums.push(last.clone());
@@ -89,21 +111,24 @@ fn print_dice(faces: usize, dice: usize, do_sum: bool, file: String)
             {
                 for y in 0..h
                 {
+                    if multi {
+                        faces = multi_face[y as usize % multi_face.len()]
+                    }
                     if x < all_nums[y as usize].len() as u32
                     {
                         let n = all_nums[y as usize][x as usize];
                         let no_zero = true;
                         if n != 0 || !no_zero
                         {
-                            let mut v = hsv2rgb(6.0 * n as f64 / faces as f64, 1.0, 1.0);
+                            let mut v = hsv2rgb(6.0 * n as f64 / if modulo == 0 {faces}else{modulo} as f64, 1.0, 1.0);
                             if no_zero {
-                                v = hsv2rgb(6.0 * (n - 1) as f64 / (faces - 1) as f64, 1.0, 1.0)
+                                v = hsv2rgb(6.0 * (n - 1) as f64 / (if modulo == 0 {faces}else{modulo} - 1) as f64, 1.0, 1.0)
                             }
-                            if faces == 2 || !no_zero
+                            if (faces == 2 || !no_zero) && !multi
                             {
                                 img.put_pixel(x, y, Rgb(v))
                             } else {
-                                img.put_pixel((width - y * (faces as u32 - 1)) / 2 + x, y, Rgb(v))
+                                img.put_pixel((width - all_nums[y as usize].len() as u32) / 2 + x, y, Rgb(v))
                             }
                         }
                     }
