@@ -32,19 +32,24 @@ fn main() {
     {
         modulo = num
     }
+    let mut signs = false;
+    if let Ok(num) = args[5].clone().parse::<usize>()
+    {
+        signs = num == 1
+    }
     //let faces = vec![faces; dice];
     if do_sum
     {
         for i in 2..=faces
         {
-            print_dice(i, i.pow(dice as u32), do_sum, file.clone(), multi_face.clone(), modulo)
+            print_dice(i, i.pow(dice as u32), do_sum, file.clone(), multi_face.clone(), modulo, signs)
         }
     } else {
-        print_dice(faces, dice, do_sum, file, multi_face, modulo)
+        print_dice(faces, dice, do_sum, file, multi_face, modulo, signs)
     }
 }
 
-fn print_dice(mut faces: usize, dice: usize, do_sum: bool, file: String, multi_face: Vec<usize>, modulo: usize)
+fn print_dice(mut faces: usize, dice: usize, do_sum: bool, file: String, multi_face: Vec<usize>, modulo: usize, signs: bool)
 {
     let file_exists = !file.is_empty();
     let mut all_nums = vec![vec![1]];
@@ -64,8 +69,18 @@ fn print_dice(mut faces: usize, dice: usize, do_sum: bool, file: String, multi_f
             faces = multi_face[0]
         }
         let mut last = vec![1; faces];
+        if signs
+        {
+            for (i,n) in last.iter_mut().enumerate()
+            {
+                if i%2 == 1
+                {
+                    *n=if modulo == 0 {faces}else{modulo} as isize-1;
+                }
+            }
+        }
         all_nums.push(last.clone());
-        let mut current = last.clone();
+        let mut current: Vec<isize> = last.clone();
         for i in 1..dice
         {
             if multi {
@@ -75,7 +90,7 @@ fn print_dice(mut faces: usize, dice: usize, do_sum: bool, file: String, multi_f
             {
                 if is_power_of(i, faces)
                 {
-                    print!("{},\t", current.iter().sum::<usize>());
+                    print!("{},\t", current.iter().sum::<isize>());
                     stdout().flush().unwrap();
                 }
             } else if !file_exists {
@@ -84,23 +99,29 @@ fn print_dice(mut faces: usize, dice: usize, do_sum: bool, file: String, multi_f
             current = Vec::new();
             for p in 0..=if multi {multi_face.iter().sum::<usize>() * (i/multi_face.len()) + multi_face[0..=i % multi_face.len()].iter().sum::<usize>()} else{faces * (i + 1)} - i - 1
             {
-                let value = last[if (p + 1) > faces
+                let start = if (p + 1) > faces
                 {
                     p + 1 - faces
                 } else {
                     0
-                }
+                };
+                let value = last[start
                     ..=p.min(if multi {multi_face.iter().sum::<usize>() * (i/multi_face.len()) + multi_face[0..i % multi_face.len()].iter().sum::<usize>()} else {faces * i} - i)]
-                    .iter()
-                    .sum::<usize>();
-                current.push(value % if modulo == 0 {faces}else{modulo})
+                    .iter().enumerate().map(|(j,a)| if signs && if (p + 1) <= faces && (faces-(p+1))%2 ==1 {j % 2 == 0} else{ j % 2 == 1} {-a}else{*a} )
+                    .sum::<isize>();
+                let mut n = value % if modulo == 0 {faces}else{modulo} as isize;
+                if signs && n.is_negative()
+                {
+                    n += if modulo == 0 {faces}else{modulo} as isize;
+                }
+                current.push(n)
             }
             last.clone_from(&current);
             all_nums.push(last.clone());
         }
         if do_sum
         {
-            println!("{}", current.iter().sum::<usize>());
+            println!("{}", current.iter().sum::<isize>());
         } else if !file_exists {
             println!("{:?}", current);
         } else {
